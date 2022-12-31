@@ -29,13 +29,6 @@ Resources:
       Policies:
         - DynamoDBWritePolicy:
             TableName: !Ref Items
-      Events:
-        ApiPOSTitemsid:
-          Type: Api
-          Properties:
-            Path: /items/{id}
-            Method: POST
-            RestApiId: !Ref Api
   UpdateItem:
     Type: AWS::Serverless::Function
     Properties:
@@ -55,40 +48,33 @@ Resources:
       Policies:
         - DynamoDBWritePolicy:
             TableName: !Ref Items
-      Events:
-        ApiPUTitemsid:
-          Type: Api
-          Properties:
-            Path: /items/{id}
-            Method: PUT
-            RestApiId: !Ref Api
   Schedule:
     Type: AWS::Scheduler::Schedule
     Properties:
-      ScheduleExpression: cron(0 14 * * ? *)
+      ScheduleExpression: rate(1 minute)
       FlexibleTimeWindow:
         Mode: 'OFF'
       Target:
-        Arn: !GetAtt TextSender.Arn
-        RoleArn: !GetAtt ScheduleToTextSenderRole.Arn
-  TextSender:
+        Arn: !GetAtt Function.Arn
+        RoleArn: !GetAtt ScheduleToFunctionRole.Arn
+  Function:
     Type: AWS::Serverless::Function
     Properties:
       Description: !Sub
         - Stack ${AWS::StackName} Function ${ResourceName}
-        - ResourceName: TextSender
-      CodeUri: src/TextSender
-      Handler: handler.handler
-      Runtime: python3.9
+        - ResourceName: Function
+      CodeUri: src/Function
+      Handler: index.handler
+      Runtime: nodejs18.x
       MemorySize: 3008
-      Timeout: 900
+      Timeout: 30
       Tracing: Active
-  TextSenderLogGroup:
+  FunctionLogGroup:
     Type: AWS::Logs::LogGroup
     DeletionPolicy: Retain
     Properties:
-      LogGroupName: !Sub /aws/lambda/${TextSender}
-  ScheduleToTextSenderRole:
+      LogGroupName: !Sub /aws/lambda/${Function}
+  ScheduleToFunctionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -110,33 +96,7 @@ Resources:
             Statement:
               - Effect: Allow
                 Action: lambda:InvokeFunction
-                Resource: !GetAtt TextSender.Arn
-  Api:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name: !Sub
-        - ${ResourceName} From Stack ${AWS::StackName}
-        - ResourceName: Api
-      StageName: Prod
-      DefinitionBody:
-        openapi: '3.0'
-        info: {}
-        paths:
-          /items/{id}:
-            post:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateItem.Arn}/invocations
-              responses: {}
-            put:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri: !Sub arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateItem.Arn}/invocations
-              responses: {}
-      EndpointConfiguration: REGIONAL
-      TracingEnabled: true
+                Resource: !GetAtt Function.Arn
 Metadata:
   AWS::Composer::Groups:
     Group:
@@ -147,5 +107,8 @@ Metadata:
     Group2:
       Label: MessageSender
       Members:
+        - Function
         - Schedule
-        - TextSender
+    Group3:
+      Label: Group3
+      Members: []

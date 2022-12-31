@@ -3,3 +3,8 @@ version = 0.1
 stack_name = "aws-app-composer-basic-api"
 [default.deploy.parameters]
 capabilities = "CAPABILITY_IAM"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-139cq5tfaxqkk"
+s3_prefix = "aws-app-composer-basic-api"
+region = "us-east-1"
+confirm_changeset = true
+image_repositories = []

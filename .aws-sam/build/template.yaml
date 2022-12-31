@@ -1,56 +1,5 @@
 Transform: AWS::Serverless-2016-10-31
 Resources:
-  Api:
-    Type: AWS::Serverless::Api
-    Properties:
-      Name:
-        Fn::Sub:
-        - ${ResourceName} From Stack ${AWS::StackName}
-        - ResourceName: Api
-      StageName: Prod
-      DefinitionBody:
-        openapi: '3.0'
-        info: {}
-        paths:
-          /items:
-            get:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri:
-                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ListItems.Arn}/invocations
-              responses: {}
-            post:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri:
-                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateItem.Arn}/invocations
-              responses: {}
-          /items/{id}:
-            get:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri:
-                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetItem.Arn}/invocations
-              responses: {}
-            put:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri:
-                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateItem.Arn}/invocations
-              responses: {}
-            delete:
-              x-amazon-apigateway-integration:
-                httpMethod: POST
-                type: aws_proxy
-                uri:
-                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteItem.Arn}/invocations
-              responses: {}
-      EndpointConfiguration: REGIONAL
-      TracingEnabled: true
   Items:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -61,39 +10,6 @@ Resources:
       KeySchema:
       - AttributeName: id
         KeyType: HASH
-  ListItems:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${AWS::StackName}-ListItems
-      Description:
-        Fn::Sub:
-        - Stack ${AWS::StackName} Function ${ResourceName}
-        - ResourceName: ListItems
-      CodeUri: ListItems
-      Handler: index.handler
-      Runtime: nodejs18.x
-      MemorySize: 1024
-      Timeout: 30
-      Tracing: Active
-      Events:
-        ApiGETitems:
-          Type: Api
-          Properties:
-            Path: /items
-            Method: GET
-            RestApiId:
-              Ref: Api
-      Environment:
-        Variables:
-          ITEMS_TABLE_NAME:
-            Ref: Items
-      Policies:
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: Items
-    Metadata:
-      SamResourceId: ListItems
   CreateItem:
     Type: AWS::Serverless::Function
     Properties:
@@ -107,16 +23,8 @@ Resources:
       Handler: index.handler
       Runtime: nodejs18.x
       MemorySize: 1024
-      Timeout: 30
+      Timeout: 900
       Tracing: Active
-      Events:
-        ApiPOSTitems:
-          Type: Api
-          Properties:
-            Path: /items
-            Method: POST
-            RestApiId:
-              Ref: Api
       Environment:
         Variables:
           ITEMS_TABLE_NAME:
@@ -125,41 +33,16 @@ Resources:
       - DynamoDBWritePolicy:
           TableName:
             Ref: Items
-    Metadata:
-      SamResourceId: CreateItem
-  GetItem:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${AWS::StackName}-GetItem
-      Description:
-        Fn::Sub:
-        - Stack ${AWS::StackName} Function ${ResourceName}
-        - ResourceName: GetItem
-      CodeUri: GetItem
-      Handler: index.handler
-      Runtime: nodejs18.x
-      MemorySize: 1024
-      Timeout: 30
-      Tracing: Active
       Events:
-        ApiGETitemsid:
+        ApiPOSTitemsid:
           Type: Api
           Properties:
             Path: /items/{id}
-            Method: GET
+            Method: POST
             RestApiId:
               Ref: Api
-      Environment:
-        Variables:
-          ITEMS_TABLE_NAME:
-            Ref: Items
-      Policies:
-      - DynamoDBReadPolicy:
-          TableName:
-            Ref: Items
     Metadata:
-      SamResourceId: GetItem
+      SamResourceId: CreateItem
   UpdateItem:
     Type: AWS::Serverless::Function
     Properties:
@@ -173,16 +56,8 @@ Resources:
       Handler: index.handler
       Runtime: nodejs18.x
       MemorySize: 1024
-      Timeout: 30
+      Timeout: 900
       Tracing: Active
-      Events:
-        ApiPUTitemsid:
-          Type: Api
-          Properties:
-            Path: /items/{id}
-            Method: PUT
-            RestApiId:
-              Ref: Api
       Environment:
         Variables:
           ITEMS_TABLE_NAME:
@@ -191,48 +66,118 @@ Resources:
       - DynamoDBWritePolicy:
           TableName:
             Ref: Items
-    Metadata:
-      SamResourceId: UpdateItem
-  DeleteItem:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName:
-        Fn::Sub: ${AWS::StackName}-DeleteItem
-      Description:
-        Fn::Sub:
-        - Stack ${AWS::StackName} Function ${ResourceName}
-        - ResourceName: DeleteItem
-      CodeUri: DeleteItem
-      Handler: index.handler
-      Runtime: nodejs18.x
-      MemorySize: 1024
-      Timeout: 30
-      Tracing: Active
       Events:
-        ApiDELETEitemsid:
+        ApiPUTitemsid:
           Type: Api
           Properties:
             Path: /items/{id}
-            Method: DELETE
+            Method: PUT
             RestApiId:
               Ref: Api
-      Environment:
-        Variables:
-          ITEMS_TABLE_NAME:
-            Ref: Items
-      Policies:
-      - DynamoDBCrudPolicy:
-          TableName:
-            Ref: Items
     Metadata:
-      SamResourceId: DeleteItem
+      SamResourceId: UpdateItem
+  Schedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      ScheduleExpression: cron(0 14 * * ? *)
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      Target:
+        Arn:
+          Fn::GetAtt:
+          - TextSender
+          - Arn
+        RoleArn:
+          Fn::GetAtt:
+          - ScheduleToTextSenderRole
+          - Arn
+  TextSender:
+    Type: AWS::Serverless::Function
+    Properties:
+      Description:
+        Fn::Sub:
+        - Stack ${AWS::StackName} Function ${ResourceName}
+        - ResourceName: TextSender
+      CodeUri: TextSender
+      Handler: handler.handler
+      Runtime: python3.9
+      MemorySize: 3008
+      Timeout: 900
+      Tracing: Active
+    Metadata:
+      SamResourceId: TextSender
+  TextSenderLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: Retain
+    Properties:
+      LogGroupName:
+        Fn::Sub: /aws/lambda/${TextSender}
+  ScheduleToTextSenderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          Effect: Allow
+          Principal:
+            Service:
+              Fn::Sub: scheduler.${AWS::URLSuffix}
+          Action: sts:AssumeRole
+          Condition:
+            ArnLike:
+              aws:SourceArn:
+                Fn::Sub:
+                - arn:${AWS::Partition}:scheduler:${AWS::Region}:${AWS::AccountId}:schedule/*/${AWS::StackName}-${ResourceId}-*
+                - ResourceId: Schedule
+      Policies:
+      - PolicyName: StartExecutionPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource:
+              Fn::GetAtt:
+              - TextSender
+              - Arn
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name:
+        Fn::Sub:
+        - ${ResourceName} From Stack ${AWS::StackName}
+        - ResourceName: Api
+      StageName: Prod
+      DefinitionBody:
+        openapi: '3.0'
+        info: {}
+        paths:
+          /items/{id}:
+            post:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateItem.Arn}/invocations
+              responses: {}
+            put:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                type: aws_proxy
+                uri:
+                  Fn::Sub: arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateItem.Arn}/invocations
+              responses: {}
+      EndpointConfiguration: REGIONAL
+      TracingEnabled: true
 Metadata:
   AWS::Composer::Groups:
     Group:
-      Label: API Compute
+      Label: Compute
       Members:
-      - ListItems
-      - CreateItem
-      - GetItem
-      - DeleteItem
       - UpdateItem
+      - CreateItem
+    Group2:
+      Label: MessageSender
+      Members:
+      - Schedule
+      - TextSender
